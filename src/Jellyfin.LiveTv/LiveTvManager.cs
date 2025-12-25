@@ -150,7 +150,7 @@ namespace Jellyfin.LiveTv
 
             internalQuery.OrderBy = orderBy.ToArray();
 
-            return _libraryManager.GetItemsResult(internalQuery);
+            return _libraryManager.GetItemsResultAsync(internalQuery).GetAwaiter().GetResult();
         }
 
         private ILiveTvService GetService(LiveTvChannel item)
@@ -500,7 +500,7 @@ namespace Jellyfin.LiveTv
                 dtoOptions.Fields = dtoOptions.Fields.Concat([ItemFields.Tags]).Distinct().ToArray();
             }
 
-            var result = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
+            var result = _libraryManager.GetItemsResultAsync(new InternalItemsQuery(user)
             {
                 MediaTypes = [MediaType.Video],
                 Recursive = true,
@@ -515,7 +515,7 @@ namespace Jellyfin.LiveTv
                 ExcludeItemTypes = excludeItemTypes.ToArray(),
                 Genres = genres.ToArray(),
                 DtoOptions = dtoOptions
-            });
+            }).GetAwaiter().GetResult();
 
             if (query.IsInProgress ?? false)
             {

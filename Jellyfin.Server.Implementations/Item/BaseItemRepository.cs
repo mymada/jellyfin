@@ -283,6 +283,45 @@ public sealed class BaseItemRepository
     }
 
     /// <inheritdoc />
+    public async Task<QueryResult<BaseItemDto>> GetItemsAsync(InternalItemsQuery filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        if (!filter.EnableTotalRecordCount || ((filter.Limit ?? 0) == 0 && (filter.StartIndex ?? 0) == 0))
+        {
+            var returnList = await GetItemListAsync(filter).ConfigureAwait(false);
+            return new QueryResult<BaseItemDto>(
+                filter.StartIndex,
+                returnList.Count,
+                returnList);
+        }
+
+        PrepareFilterQuery(filter);
+        var result = new QueryResult<BaseItemDto>();
+
+        var context = await _dbProvider.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context.ConfigureAwait(false))
+        {
+            IQueryable<BaseItemEntity> dbQuery = PrepareItemQuery(context, filter);
+
+            dbQuery = TranslateQuery(dbQuery, context, filter);
+            dbQuery = ApplyGroupingFilter(context, dbQuery, filter);
+
+            if (filter.EnableTotalRecordCount)
+            {
+                result.TotalRecordCount = await dbQuery.CountAsync().ConfigureAwait(false);
+            }
+
+            dbQuery = ApplyQueryPaging(dbQuery, filter);
+            dbQuery = ApplyNavigations(dbQuery, filter);
+
+            var items = await dbQuery.ToListAsync().ConfigureAwait(false);
+            result.Items = items.Where(e => e is not null).Select(w => DeserializeBaseItem(w, filter.SkipDeserialization)).ToArray();
+            result.StartIndex = filter.StartIndex ?? 0;
+            return result;
+        }
+    }
+
+    /// <inheritdoc />
     public IReadOnlyList<BaseItemDto> GetItemList(InternalItemsQuery filter)
     {
         ArgumentNullException.ThrowIfNull(filter);
@@ -298,6 +337,28 @@ public sealed class BaseItemRepository
         dbQuery = ApplyNavigations(dbQuery, filter);
 
         return dbQuery.AsEnumerable().Where(e => e is not null).Select(w => DeserializeBaseItem(w, filter.SkipDeserialization)).ToArray();
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<BaseItemDto>> GetItemListAsync(InternalItemsQuery filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        PrepareFilterQuery(filter);
+
+        var context = await _dbProvider.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context.ConfigureAwait(false))
+        {
+            IQueryable<BaseItemEntity> dbQuery = PrepareItemQuery(context, filter);
+
+            dbQuery = TranslateQuery(dbQuery, context, filter);
+
+            dbQuery = ApplyGroupingFilter(context, dbQuery, filter);
+            dbQuery = ApplyQueryPaging(dbQuery, filter);
+            dbQuery = ApplyNavigations(dbQuery, filter);
+
+            var items = await dbQuery.ToListAsync().ConfigureAwait(false);
+            return items.Where(e => e is not null).Select(w => DeserializeBaseItem(w, filter.SkipDeserialization)).ToArray();
+        }
     }
 
     /// <inheritdoc/>
@@ -468,6 +529,22 @@ public sealed class BaseItemRepository
         return dbQuery.Count();
     }
 
+    /// <inheritdoc/>
+    public async Task<int> GetCountAsync(InternalItemsQuery filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        // Hack for right now since we currently don't support filtering out these duplicates within a query
+        PrepareFilterQuery(filter);
+
+        var context = await _dbProvider.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context.ConfigureAwait(false))
+        {
+            var dbQuery = TranslateQuery(context.BaseItems.AsNoTracking(), context, filter);
+
+            return await dbQuery.CountAsync().ConfigureAwait(false);
+        }
+    }
+
     /// <inheritdoc />
     public ItemCounts GetItemCounts(InternalItemsQuery filter)
     {
@@ -526,6 +603,69 @@ public sealed class BaseItemRepository
         }
 
         return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<ItemCounts> GetItemCountsAsync(InternalItemsQuery filter)
+    {
+        ArgumentNullException.ThrowIfNull(filter);
+        // Hack for right now since we currently don't support filtering out these duplicates within a query
+        PrepareFilterQuery(filter);
+
+        var context = await _dbProvider.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context.ConfigureAwait(false))
+        {
+            var dbQuery = TranslateQuery(context.BaseItems.AsNoTracking(), context, filter);
+
+            var counts = await dbQuery
+                .GroupBy(x => x.Type)
+                .Select(x => new { x.Key, Count = x.Count() })
+                .ToArrayAsync().ConfigureAwait(false);
+
+            var lookup = _itemTypeLookup.BaseItemKindNames;
+            var result = new ItemCounts();
+            foreach (var count in counts)
+            {
+                if (string.Equals(count.Key, lookup[BaseItemKind.MusicAlbum], StringComparison.Ordinal))
+                {
+                    result.AlbumCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.MusicArtist], StringComparison.Ordinal))
+                {
+                    result.ArtistCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.Episode], StringComparison.Ordinal))
+                {
+                    result.EpisodeCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.Movie], StringComparison.Ordinal))
+                {
+                    result.MovieCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.MusicVideo], StringComparison.Ordinal))
+                {
+                    result.MusicVideoCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.LiveTvProgram], StringComparison.Ordinal))
+                {
+                    result.ProgramCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.Series], StringComparison.Ordinal))
+                {
+                    result.SeriesCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.Audio], StringComparison.Ordinal))
+                {
+                    result.SongCount = count.Count;
+                }
+                else if (string.Equals(count.Key, lookup[BaseItemKind.Trailer], StringComparison.Ordinal))
+                {
+                    result.TrailerCount = count.Count;
+                }
+            }
+
+            return result;
+        }
     }
 
 #pragma warning disable CA1307 // Specify StringComparison for clarity

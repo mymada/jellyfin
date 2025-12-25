@@ -50,6 +50,13 @@ public interface IItemRepository
     QueryResult<BaseItem> GetItems(InternalItemsQuery filter);
 
     /// <summary>
+    /// Gets the items async.
+    /// </summary>
+    /// <param name="filter">The query.</param>
+    /// <returns>QueryResult&lt;BaseItem&gt;.</returns>
+    Task<QueryResult<BaseItem>> GetItemsAsync(InternalItemsQuery filter);
+
+    /// <summary>
     /// Gets the item ids list.
     /// </summary>
     /// <param name="filter">The query.</param>
@@ -62,6 +69,13 @@ public interface IItemRepository
     /// <param name="filter">The query.</param>
     /// <returns>List&lt;BaseItem&gt;.</returns>
     IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter);
+
+    /// <summary>
+    /// Gets the item list async.
+    /// </summary>
+    /// <param name="filter">The query.</param>
+    /// <returns>List&lt;BaseItem&gt;.</returns>
+    Task<IReadOnlyList<BaseItem>> GetItemListAsync(InternalItemsQuery filter);
 
     /// <summary>
     /// Gets the item list. Used mainly by the Latest api endpoint.
@@ -86,7 +100,11 @@ public interface IItemRepository
 
     int GetCount(InternalItemsQuery filter);
 
+    Task<int> GetCountAsync(InternalItemsQuery filter);
+
     ItemCounts GetItemCounts(InternalItemsQuery filter);
+
+    Task<ItemCounts> GetItemCountsAsync(InternalItemsQuery filter);
 
     QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetGenres(InternalItemsQuery filter);
 

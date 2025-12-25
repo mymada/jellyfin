@@ -1536,6 +1536,37 @@ namespace Emby.Server.Implementations.Library
                 _itemRepository.GetItemList(query));
         }
 
+        public async Task<QueryResult<BaseItem>> GetItemsResultAsync(InternalItemsQuery query)
+        {
+            if (query.Recursive && !query.ParentId.IsEmpty())
+            {
+                var parent = GetItemById(query.ParentId);
+                if (parent is not null)
+                {
+                    SetTopParentIdsOrAncestors(query, [parent]);
+                }
+            }
+
+            if (query.User is not null)
+            {
+                AddUserToQuery(query, query.User);
+            }
+
+            if (query.EnableTotalRecordCount)
+            {
+                var repoItems = await _itemRepository.GetItemsAsync(query).ConfigureAwait(false);
+                return new QueryResult<BaseItem>(
+                    repoItems.StartIndex,
+                    repoItems.TotalRecordCount,
+                    repoItems.Items);
+            }
+
+            return new QueryResult<BaseItem>(
+                query.StartIndex,
+                null,
+                await _itemRepository.GetItemListAsync(query).ConfigureAwait(false));
+        }
+
         public IReadOnlyList<Guid> GetItemIds(InternalItemsQuery query)
         {
             if (query.User is not null)

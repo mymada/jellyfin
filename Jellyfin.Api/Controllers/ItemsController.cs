@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using System.Threading.Tasks;
 using Jellyfin.Api.Extensions;
 using Jellyfin.Api.Helpers;
 using Jellyfin.Api.ModelBinders;
@@ -159,7 +160,7 @@ public class ItemsController : BaseJellyfinApiController
     /// <returns>A <see cref="QueryResult{BaseItemDto}"/> with the items.</returns>
     [HttpGet("Items")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ActionResult<QueryResult<BaseItemDto>> GetItems(
+    public async Task<ActionResult<QueryResult<BaseItemDto>>> GetItems(
         [FromQuery] Guid? userId,
         [FromQuery] string? maxOfficialRating,
         [FromQuery] bool? hasThemeSong,
@@ -519,7 +520,8 @@ public class ItemsController : BaseJellyfinApiController
             }
 
             query.Parent = null;
-            result = folder.GetItems(query);
+            // Use the Async version if available on LibraryManager, checking the interface
+            result = await _libraryManager.GetItemsResultAsync(query).ConfigureAwait(false);
         }
         else
         {
@@ -626,7 +628,7 @@ public class ItemsController : BaseJellyfinApiController
     [Obsolete("Kept for backwards compatibility")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ActionResult<QueryResult<BaseItemDto>> GetItemsByUserIdLegacy(
+    public async Task<ActionResult<QueryResult<BaseItemDto>>> GetItemsByUserIdLegacy(
         [FromRoute] Guid userId,
         [FromQuery] string? maxOfficialRating,
         [FromQuery] bool? hasThemeSong,
@@ -712,7 +714,7 @@ public class ItemsController : BaseJellyfinApiController
         [FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] Guid[] genreIds,
         [FromQuery] bool enableTotalRecordCount = true,
         [FromQuery] bool? enableImages = true)
-        => GetItems(
+        => await GetItems(
             userId,
             maxOfficialRating,
             hasThemeSong,
@@ -798,7 +800,7 @@ public class ItemsController : BaseJellyfinApiController
             studioIds,
             genreIds,
             enableTotalRecordCount,
-            enableImages);
+            enableImages).ConfigureAwait(false);
 
     /// <summary>
     /// Gets items based on a query.
@@ -822,7 +824,7 @@ public class ItemsController : BaseJellyfinApiController
     /// <returns>A <see cref="QueryResult{BaseItemDto}"/> with the items that are resumable.</returns>
     [HttpGet("UserItems/Resume")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ActionResult<QueryResult<BaseItemDto>> GetResumeItems(
+    public async Task<ActionResult<QueryResult<BaseItemDto>>> GetResumeItems(
         [FromQuery] Guid? userId,
         [FromQuery] int? startIndex,
         [FromQuery] int? limit,
@@ -871,7 +873,7 @@ public class ItemsController : BaseJellyfinApiController
                 .ToArray();
         }
 
-        var itemsResult = _libraryManager.GetItemsResult(new InternalItemsQuery(user)
+        var itemsResult = await _libraryManager.GetItemsResultAsync(new InternalItemsQuery(user)
         {
             OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
             IsResumable = true,
@@ -889,7 +891,7 @@ public class ItemsController : BaseJellyfinApiController
             ExcludeItemTypes = excludeItemTypes,
             SearchTerm = searchTerm,
             ExcludeItemIds = excludeItemIds
-        });
+        }).ConfigureAwait(false);
 
         var returnItems = _dtoService.GetBaseItemDtos(itemsResult.Items, dtoOptions, user);
 
@@ -923,7 +925,7 @@ public class ItemsController : BaseJellyfinApiController
     [Obsolete("Kept for backwards compatibility")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public ActionResult<QueryResult<BaseItemDto>> GetResumeItemsLegacy(
+    public async Task<ActionResult<QueryResult<BaseItemDto>>> GetResumeItemsLegacy(
         [FromRoute, Required] Guid userId,
         [FromQuery] int? startIndex,
         [FromQuery] int? limit,
@@ -939,7 +941,7 @@ public class ItemsController : BaseJellyfinApiController
         [FromQuery] bool enableTotalRecordCount = true,
         [FromQuery] bool? enableImages = true,
         [FromQuery] bool excludeActiveSessions = false)
-    => GetResumeItems(
+    => await GetResumeItems(
         userId,
         startIndex,
         limit,
@@ -954,7 +956,7 @@ public class ItemsController : BaseJellyfinApiController
         includeItemTypes,
         enableTotalRecordCount,
         enableImages,
-        excludeActiveSessions);
+        excludeActiveSessions).ConfigureAwait(false);
 
     /// <summary>
     /// Get Item User Data.

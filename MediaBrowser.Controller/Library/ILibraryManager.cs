@@ -600,6 +600,13 @@ namespace MediaBrowser.Controller.Library
         QueryResult<BaseItem> GetItemsResult(InternalItemsQuery query);
 
         /// <summary>
+        /// Gets the items result async.
+        /// </summary>
+        /// <param name="query">The query.</param>
+        /// <returns>QueryResult&lt;BaseItem&gt;.</returns>
+        Task<QueryResult<BaseItem>> GetItemsResultAsync(InternalItemsQuery query);
+
+        /// <summary>
         /// Checks if the file is ignored.
         /// </summary>
         /// <param name="file">The file.</param>

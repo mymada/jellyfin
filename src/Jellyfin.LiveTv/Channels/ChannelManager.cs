@@ -651,7 +651,7 @@ namespace Jellyfin.LiveTv.Channels
                 };
             }
 
-            return _libraryManager.GetItemsResult(query);
+            return await _libraryManager.GetItemsResultAsync(query).ConfigureAwait(false);
         }
 
         private async Task RefreshLatestChannelItems(IChannel channel, CancellationToken cancellationToken)
@@ -754,7 +754,7 @@ namespace Jellyfin.LiveTv.Channels
                 }
             }
 
-            return _libraryManager.GetItemsResult(query);
+            return await _libraryManager.GetItemsResultAsync(query).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
