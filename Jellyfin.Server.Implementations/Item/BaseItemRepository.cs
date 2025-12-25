@@ -1204,7 +1204,7 @@ public sealed class BaseItemRepository
 
         using var context = _dbProvider.CreateDbContext();
 
-        var innerQueryFilter = TranslateQuery(context.BaseItems.Where(e => e.Id != EF.Constant(PlaceholderId)), context, new InternalItemsQuery(filter.User)
+        var innerQueryFilter = TranslateQuery(context.BaseItems.AsNoTracking().Where(e => e.Id != EF.Constant(PlaceholderId)), context, new InternalItemsQuery(filter.User)
         {
             ExcludeItemTypes = filter.ExcludeItemTypes,
             IncludeItemTypes = filter.IncludeItemTypes,
@@ -2597,12 +2597,12 @@ public sealed class BaseItemRepository
         {
             var folderList = TraverseHirachyDown(id, dbContext, item => (item.IsFolder || item.IsVirtualItem));
 
-            return dbContext.BaseItems
+            return dbContext.BaseItems.AsNoTracking()
                     .Where(e => folderList.Contains(e.ParentId!.Value) && !e.IsFolder && !e.IsVirtualItem)
                     .All(f => f.UserData!.Any(e => e.UserId == user.Id && e.Played));
         }
 
-        return dbContext.BaseItems.Where(e => e.ParentId == id).All(f => f.UserData!.Any(e => e.UserId == user.Id && e.Played));
+        return dbContext.BaseItems.AsNoTracking().Where(e => e.ParentId == id).All(f => f.UserData!.Any(e => e.UserId == user.Id && e.Played));
     }
 
     private static HashSet<Guid> TraverseHirachyDown(Guid parentId, JellyfinDbContext dbContext, Expression<Func<BaseItemEntity, bool>>? filter = null)
@@ -2620,7 +2620,7 @@ public sealed class BaseItemRepository
         {
             var items = folderStack.ToArray();
             folderStack.Clear();
-            var query = dbContext.BaseItems
+            var query = dbContext.BaseItems.AsNoTracking()
                 .WhereOneOrMany(items, e => e.ParentId!.Value);
 
             if (filter != null)
@@ -2645,7 +2645,7 @@ public sealed class BaseItemRepository
     {
         using var dbContext = _dbProvider.CreateDbContext();
 
-        var artists = dbContext.BaseItems.Where(e => e.Type == _itemTypeLookup.BaseItemKindNames[BaseItemKind.MusicArtist]!)
+        var artists = dbContext.BaseItems.AsNoTracking().Where(e => e.Type == _itemTypeLookup.BaseItemKindNames[BaseItemKind.MusicArtist]!)
             .Where(e => artistNames.Contains(e.Name))
             .ToArray();
 
