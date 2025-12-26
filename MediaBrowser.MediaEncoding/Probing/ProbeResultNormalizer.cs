@@ -36,6 +36,34 @@ namespace MediaBrowser.MediaEncoding.Probing
         private static readonly string[] _webmVideoCodecs = ["av1", "vp8", "vp9"];
         private static readonly string[] _webmAudioCodecs = ["opus", "vorbis"];
 
+        /// <summary>
+        /// Maps audio tag keys to their corresponding PersonKind for people extraction.
+        /// Performer tag is handled separately due to special regex parsing.
+        /// </summary>
+        private static readonly Dictionary<string, PersonKind> _tagToPersonKindMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["composer"] = PersonKind.Composer,
+            ["conductor"] = PersonKind.Conductor,
+            ["lyricist"] = PersonKind.Lyricist,
+            ["writer"] = PersonKind.Writer,
+            ["arranger"] = PersonKind.Arranger,
+            ["engineer"] = PersonKind.Engineer,
+            ["mixer"] = PersonKind.Mixer,
+            ["remixer"] = PersonKind.Remixer
+        };
+
+        /// <summary>
+        /// Maps MusicBrainz tag key pairs (titleCase, UPPERCASE) to their corresponding MetadataProvider.
+        /// </summary>
+        private static readonly (string TitleCaseKey, string UpperCaseKey, MetadataProvider Provider)[] _musicBrainzTagMappings =
+        [
+            ("MusicBrainz Album Artist Id", "MUSICBRAINZ_ALBUMARTISTID", MetadataProvider.MusicBrainzAlbumArtist),
+            ("MusicBrainz Artist Id", "MUSICBRAINZ_ARTISTID", MetadataProvider.MusicBrainzArtist),
+            ("MusicBrainz Album Id", "MUSICBRAINZ_ALBUMID", MetadataProvider.MusicBrainzAlbum),
+            ("MusicBrainz Release Group Id", "MUSICBRAINZ_RELEASEGROUPID", MetadataProvider.MusicBrainzReleaseGroup),
+            ("MusicBrainz Release Track Id", "MUSICBRAINZ_RELEASETRACKID", MetadataProvider.MusicBrainzTrack)
+        ];
+
         private readonly ILogger _logger;
         private readonly ILocalizationManager _localization;
 
@@ -1260,37 +1288,28 @@ namespace MediaBrowser.MediaEncoding.Probing
         private void SetAudioInfoFromTags(MediaInfo audio, Dictionary<string, string> tags)
         {
             var people = new List<BaseItemPerson>();
-            if (tags.TryGetValue("composer", out var composer) && !string.IsNullOrWhiteSpace(composer))
+
+            // Extract people from standard role tags using data-driven mapping
+            foreach (var (tagKey, personKind) in _tagToPersonKindMap)
             {
-                foreach (var person in Split(composer, false))
+                if (tags.TryGetValue(tagKey, out var tagValue) && !string.IsNullOrWhiteSpace(tagValue))
                 {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Composer });
+                    foreach (var person in Split(tagValue, false))
+                    {
+                        people.Add(new BaseItemPerson { Name = person, Type = personKind });
+                    }
                 }
             }
 
-            if (tags.TryGetValue("conductor", out var conductor) && !string.IsNullOrWhiteSpace(conductor))
-            {
-                foreach (var person in Split(conductor, false))
-                {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Conductor });
-                }
-            }
-
-            if (tags.TryGetValue("lyricist", out var lyricist) && !string.IsNullOrWhiteSpace(lyricist))
-            {
-                foreach (var person in Split(lyricist, false))
-                {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Lyricist });
-                }
-            }
-
+            // Handle performer tag separately - it uses regex to extract instrument/role
             if (tags.TryGetValue("performer", out var performer) && !string.IsNullOrWhiteSpace(performer))
             {
                 foreach (var person in Split(performer, false))
                 {
                     Match match = PerformerRegex().Match(person);
 
-                    // If the performer doesn't have any instrument/role associated, it won't match. In that case, chances are it's simply a band name, so we skip it.
+                    // If the performer doesn't have any instrument/role associated, it won't match.
+                    // In that case, chances are it's simply a band name, so we skip it.
                     if (match.Success)
                     {
                         people.Add(new BaseItemPerson
@@ -1300,47 +1319,6 @@ namespace MediaBrowser.MediaEncoding.Probing
                             Role = CultureInfo.InvariantCulture.TextInfo.ToTitleCase(match.Groups["instrument"].Value)
                         });
                     }
-                }
-            }
-
-            // In cases where there isn't sufficient information as to which role a writer performed on a recording, tagging software uses the "writer" tag.
-            if (tags.TryGetValue("writer", out var writer) && !string.IsNullOrWhiteSpace(writer))
-            {
-                foreach (var person in Split(writer, false))
-                {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Writer });
-                }
-            }
-
-            if (tags.TryGetValue("arranger", out var arranger) && !string.IsNullOrWhiteSpace(arranger))
-            {
-                foreach (var person in Split(arranger, false))
-                {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Arranger });
-                }
-            }
-
-            if (tags.TryGetValue("engineer", out var engineer) && !string.IsNullOrWhiteSpace(engineer))
-            {
-                foreach (var person in Split(engineer, false))
-                {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Engineer });
-                }
-            }
-
-            if (tags.TryGetValue("mixer", out var mixer) && !string.IsNullOrWhiteSpace(mixer))
-            {
-                foreach (var person in Split(mixer, false))
-                {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Mixer });
-                }
-            }
-
-            if (tags.TryGetValue("remixer", out var remixer) && !string.IsNullOrWhiteSpace(remixer))
-            {
-                foreach (var person in Split(remixer, false))
-                {
-                    people.Add(new BaseItemPerson { Name = person, Type = PersonKind.Remixer });
                 }
             }
 
@@ -1370,26 +1348,14 @@ namespace MediaBrowser.MediaEncoding.Probing
             FetchStudios(audio, tags, "publisher");
             FetchStudios(audio, tags, "label");
 
+            // Extract MusicBrainz IDs using data-driven mapping
             // These support multiple values, but for now we only store the first.
-            var mb = GetMultipleMusicBrainzId(tags.GetValueOrDefault("MusicBrainz Album Artist Id"))
-                ?? GetMultipleMusicBrainzId(tags.GetValueOrDefault("MUSICBRAINZ_ALBUMARTISTID"));
-            audio.TrySetProviderId(MetadataProvider.MusicBrainzAlbumArtist, mb);
-
-            mb = GetMultipleMusicBrainzId(tags.GetValueOrDefault("MusicBrainz Artist Id"))
-                ?? GetMultipleMusicBrainzId(tags.GetValueOrDefault("MUSICBRAINZ_ARTISTID"));
-            audio.TrySetProviderId(MetadataProvider.MusicBrainzArtist, mb);
-
-            mb = GetMultipleMusicBrainzId(tags.GetValueOrDefault("MusicBrainz Album Id"))
-                ?? GetMultipleMusicBrainzId(tags.GetValueOrDefault("MUSICBRAINZ_ALBUMID"));
-            audio.TrySetProviderId(MetadataProvider.MusicBrainzAlbum, mb);
-
-            mb = GetMultipleMusicBrainzId(tags.GetValueOrDefault("MusicBrainz Release Group Id"))
-                 ?? GetMultipleMusicBrainzId(tags.GetValueOrDefault("MUSICBRAINZ_RELEASEGROUPID"));
-            audio.TrySetProviderId(MetadataProvider.MusicBrainzReleaseGroup, mb);
-
-            mb = GetMultipleMusicBrainzId(tags.GetValueOrDefault("MusicBrainz Release Track Id"))
-                 ?? GetMultipleMusicBrainzId(tags.GetValueOrDefault("MUSICBRAINZ_RELEASETRACKID"));
-            audio.TrySetProviderId(MetadataProvider.MusicBrainzTrack, mb);
+            foreach (var (titleCaseKey, upperCaseKey, provider) in _musicBrainzTagMappings)
+            {
+                var mbId = GetMultipleMusicBrainzId(tags.GetValueOrDefault(titleCaseKey))
+                    ?? GetMultipleMusicBrainzId(tags.GetValueOrDefault(upperCaseKey));
+                audio.TrySetProviderId(provider, mbId);
+            }
         }
 
         private static string GetMultipleMusicBrainzId(string value)
