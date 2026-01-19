@@ -1705,7 +1705,9 @@ namespace Emby.Server.Implementations.Session
         {
             CheckDisposed();
 
-            _logger.LogInformation("Logging out access token {0}", device.AccessToken);
+            // Log only partial token to avoid exposing sensitive data in logs
+            var tokenPreview = device.AccessToken?.Length > 8 ? device.AccessToken[..8] + "..." : "***";
+            _logger.LogInformation("Logging out access token {TokenPreview}", tokenPreview);
 
             await _deviceManager.DeleteDevice(device).ConfigureAwait(false);
 

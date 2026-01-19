@@ -787,7 +787,8 @@ namespace Emby.Server.Implementations.Dto
         private string[] GetTagsAndFillBlurhashes(BaseItemDto dto, BaseItem item, ImageType imageType, List<ItemImageInfo> images)
         {
             var tags = GetImageTags(item, images);
-            var hashes = new Dictionary<string, string>();
+            // Pre-allocate dictionary with expected capacity to avoid resizing
+            var hashes = new Dictionary<string, string>(images.Count);
             for (int i = 0; i < images.Count; i++)
             {
                 var img = images[i];

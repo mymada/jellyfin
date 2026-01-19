@@ -645,7 +645,9 @@ namespace Jellyfin.LiveTv.Listings
             var root = await Request<TokenDto>(options, false, null, cancellationToken).ConfigureAwait(false);
             if (string.Equals(root?.Message, "OK", StringComparison.Ordinal))
             {
-                _logger.LogInformation("Authenticated with Schedules Direct token: {Token}", root.Token);
+                // Log only partial token to avoid exposing sensitive data in logs
+                var tokenPreview = root.Token?.Length > 8 ? root.Token[..8] + "..." : "***";
+                _logger.LogInformation("Authenticated with Schedules Direct token: {TokenPreview}", tokenPreview);
                 return root.Token;
             }
 
