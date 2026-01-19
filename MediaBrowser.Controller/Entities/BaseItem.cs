@@ -929,25 +929,41 @@ namespace MediaBrowser.Controller.Entities
             }
 
             var sortable = Name.Trim().ToLowerInvariant();
+            var sortRemoveWords = ConfigurationManager.Configuration.SortRemoveWords;
 
-            foreach (var search in ConfigurationManager.Configuration.SortRemoveWords)
+            // Process sort remove words - use StringBuilder to minimize allocations
+            if (sortRemoveWords.Length > 0)
             {
-                // Remove from beginning if a space follows
-                if (sortable.StartsWith(search + " ", StringComparison.Ordinal))
+                var sb = new StringBuilder(sortable);
+                foreach (var search in sortRemoveWords)
                 {
-                    sortable = sortable.Remove(0, search.Length + 1);
+                    var searchWithTrailingSpace = search + " ";
+                    var searchWithLeadingSpace = " " + search;
+                    var searchSurroundedBySpaces = " " + search + " ";
+
+                    // Remove from beginning if a space follows
+                    if (sb.Length >= searchWithTrailingSpace.Length &&
+                        sortable.StartsWith(searchWithTrailingSpace, StringComparison.Ordinal))
+                    {
+                        sb.Remove(0, searchWithTrailingSpace.Length);
+                        sortable = sb.ToString();
+                    }
+
+                    // Remove from middle if surrounded by spaces
+                    sb.Replace(searchSurroundedBySpaces, " ");
+
+                    // Remove from end if preceded by a space
+                    sortable = sb.ToString();
+                    if (sortable.EndsWith(searchWithLeadingSpace, StringComparison.Ordinal))
+                    {
+                        sb.Length = sb.Length - searchWithLeadingSpace.Length;
+                    }
                 }
 
-                // Remove from middle if surrounded by spaces
-                sortable = sortable.Replace(" " + search + " ", " ", StringComparison.Ordinal);
-
-                // Remove from end if preceeded by a space
-                if (sortable.EndsWith(" " + search, StringComparison.Ordinal))
-                {
-                    sortable = sortable.Remove(sortable.Length - (search.Length + 1));
-                }
+                sortable = sb.ToString();
             }
 
+            // Use Replace with StringComparison for remove/replace characters
             foreach (var removeChar in ConfigurationManager.Configuration.SortRemoveCharacters)
             {
                 sortable = sortable.Replace(removeChar, string.Empty, StringComparison.Ordinal);

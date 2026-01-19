@@ -669,7 +669,8 @@ namespace Jellyfin.LiveTv
                 }
             });
             var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-            var timers = results.SelectMany(i => i.ToList());
+            // SelectMany handles enumeration - no need for intermediate ToList() allocation
+            var timers = results.SelectMany(i => i);
 
             if (query.IsActive.HasValue)
             {
@@ -739,7 +740,8 @@ namespace Jellyfin.LiveTv
                 }
             });
             var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-            var timers = results.SelectMany(i => i.ToList());
+            // SelectMany handles enumeration - no need for intermediate ToList() allocation
+            var timers = results.SelectMany(i => i);
 
             if (query.IsActive.HasValue)
             {
@@ -879,7 +881,8 @@ namespace Jellyfin.LiveTv
                 }
             });
             var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-            var timers = results.SelectMany(i => i.ToList());
+            // SelectMany handles enumeration - no need for intermediate ToList() allocation
+            var timers = results.SelectMany(i => i);
 
             if (string.Equals(query.SortBy, "Priority", StringComparison.OrdinalIgnoreCase))
             {
@@ -917,7 +920,8 @@ namespace Jellyfin.LiveTv
                 }
             });
             var results = await Task.WhenAll(tasks).ConfigureAwait(false);
-            var timers = results.SelectMany(i => i.ToList());
+            // SelectMany handles enumeration - no need for intermediate ToList() allocation
+            var timers = results.SelectMany(i => i);
 
             if (string.Equals(query.SortBy, "Priority", StringComparison.OrdinalIgnoreCase))
             {

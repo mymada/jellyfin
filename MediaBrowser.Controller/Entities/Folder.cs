@@ -293,10 +293,11 @@ namespace MediaBrowser.Controller.Entities
 
         private Dictionary<Guid, BaseItem> GetActualChildrenDictionary()
         {
-            var dictionary = new Dictionary<Guid, BaseItem>();
-
             Children = null; // invalidate cached children.
             var childrenList = Children.ToList();
+
+            // Pre-allocate dictionary with expected capacity to avoid resizing
+            var dictionary = new Dictionary<Guid, BaseItem>(childrenList.Count);
 
             foreach (var child in childrenList)
             {

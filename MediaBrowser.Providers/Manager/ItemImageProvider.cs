@@ -630,9 +630,12 @@ namespace MediaBrowser.Providers.Manager
 
         private async Task DownloadMultiImages(BaseItem item, ImageType imageType, ImageRefreshOptions refreshOptions, int limit, IRemoteImageProvider provider, RefreshResult result, IEnumerable<RemoteImageInfo> images, int minWidth, CancellationToken cancellationToken)
         {
+            // Cache current image count to avoid repeated enumeration inside the loop
+            var currentImageCount = item.GetImages(imageType).Count();
+
             foreach (var image in images.Where(i => i.Type == imageType))
             {
-                if (item.GetImages(imageType).Count() >= limit)
+                if (currentImageCount >= limit)
                 {
                     break;
                 }
@@ -647,6 +650,7 @@ namespace MediaBrowser.Providers.Manager
                 if (EnableImageStub(item))
                 {
                     SaveImageStub(item, imageType, new[] { url });
+                    currentImageCount++;
                     result.UpdateType |= ItemUpdateType.ImageUpdate;
                     continue;
                 }
@@ -703,6 +707,7 @@ namespace MediaBrowser.Providers.Manager
                             cancellationToken).ConfigureAwait(false);
                     }
 
+                    currentImageCount++;
                     result.UpdateType |= ItemUpdateType.ImageUpdate;
                 }
                 catch (HttpRequestException)
