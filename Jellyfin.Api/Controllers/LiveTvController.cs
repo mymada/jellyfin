@@ -791,7 +791,7 @@ public class LiveTvController : BaseJellyfinApiController
     [Authorize(Policy = Policies.LiveTvManagement)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult DeleteRecording([FromRoute, Required] Guid recordingId)
+    public async Task<ActionResult> DeleteRecording([FromRoute, Required] Guid recordingId)
     {
         var item = _libraryManager.GetItemById<BaseItem>(recordingId, User.GetUserId());
         if (item is null)
@@ -799,10 +799,10 @@ public class LiveTvController : BaseJellyfinApiController
             return NotFound();
         }
 
-        _libraryManager.DeleteItem(item, new DeleteOptions
+        await _libraryManager.DeleteItemAsync(item, new DeleteOptions
         {
             DeleteFileLocation = false
-        });
+        }).ConfigureAwait(false);
 
         return NoContent();
     }

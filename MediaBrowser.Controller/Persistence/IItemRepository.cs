@@ -27,6 +27,13 @@ public interface IItemRepository
     void DeleteItem(params IReadOnlyList<Guid> ids);
 
     /// <summary>
+    /// Deletes the item asynchronously.
+    /// </summary>
+    /// <param name="ids">The identifier to delete.</param>
+    /// <returns>A task.</returns>
+    Task DeleteItemAsync(IReadOnlyList<Guid> ids);
+
+    /// <summary>
     /// Saves the items.
     /// </summary>
     /// <param name="items">The items.</param>

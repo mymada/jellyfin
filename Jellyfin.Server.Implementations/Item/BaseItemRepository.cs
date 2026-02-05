@@ -100,6 +100,77 @@ public sealed class BaseItemRepository
     }
 
     /// <inheritdoc />
+    public async Task DeleteItemAsync(IReadOnlyList<Guid> ids)
+    {
+        if (ids is null || ids.Count == 0 || ids.Any(f => f.Equals(PlaceholderId)))
+        {
+            throw new ArgumentException("Guid can't be empty or the placeholder id.", nameof(ids));
+        }
+
+        var context = await _dbProvider.CreateDbContextAsync().ConfigureAwait(false);
+        await using (context.ConfigureAwait(false))
+        {
+            var transaction = await context.Database.BeginTransactionAsync().ConfigureAwait(false);
+            await using (transaction.ConfigureAwait(false))
+            {
+                var date = (DateTime?)DateTime.UtcNow;
+
+                var relatedItems = new List<Guid>();
+                foreach (var id in ids)
+                {
+                    relatedItems.AddRange(await TraverseHirachyDownAsync(id, context).ConfigureAwait(false));
+                }
+
+                var relatedItemsArray = relatedItems.ToArray();
+
+                // Remove any UserData entries for the placeholder item that would conflict with the UserData
+                // being detached from the item being deleted. This is necessary because, during an update,
+                // UserData may be reattached to a new entry, but some entries can be left behind.
+                // Ensures there are no duplicate UserId/CustomDataKey combinations for the placeholder.
+                await context.UserData
+                    .Join(
+                        context.UserData.WhereOneOrMany(relatedItemsArray, e => e.ItemId),
+                        placeholder => new { placeholder.UserId, placeholder.CustomDataKey },
+                        userData => new { userData.UserId, userData.CustomDataKey },
+                        (placeholder, userData) => placeholder)
+                    .Where(e => e.ItemId == PlaceholderId)
+                    .ExecuteDeleteAsync()
+                    .ConfigureAwait(false);
+
+                // Detach all user watch data
+                await context.UserData.WhereOneOrMany(relatedItemsArray, e => e.ItemId)
+                    .ExecuteUpdateAsync(e => e
+                        .SetProperty(f => f.RetentionDate, date)
+                        .SetProperty(f => f.ItemId, PlaceholderId))
+                    .ConfigureAwait(false);
+
+                await context.AncestorIds.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.AncestorIds.WhereOneOrMany(relatedItemsArray, e => e.ParentItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.AttachmentStreamInfos.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.BaseItemImageInfos.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.BaseItemMetadataFields.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.BaseItemProviders.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.BaseItemTrailerTypes.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.BaseItems.WhereOneOrMany(relatedItemsArray, e => e.Id).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.Chapters.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.CustomItemDisplayPreferences.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.ItemDisplayPreferences.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.ItemValues.Where(e => e.BaseItemsMap!.Count == 0).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.ItemValuesMap.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.KeyframeData.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.MediaSegments.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.MediaStreamInfos.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                var query = await context.PeopleBaseItemMap.WhereOneOrMany(relatedItemsArray, e => e.ItemId).Select(f => f.PeopleId).Distinct().ToArrayAsync().ConfigureAwait(false);
+                await context.PeopleBaseItemMap.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.Peoples.WhereOneOrMany(query, e => e.Id).Where(e => e.BaseItems!.Count == 0).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.TrickplayInfos.WhereOneOrMany(relatedItemsArray, e => e.ItemId).ExecuteDeleteAsync().ConfigureAwait(false);
+                await context.SaveChangesAsync().ConfigureAwait(false);
+                await transaction.CommitAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <inheritdoc />
     public void DeleteItem(params IReadOnlyList<Guid> ids)
     {
         if (ids is null || ids.Count == 0 || ids.Any(f => f.Equals(PlaceholderId)))
@@ -2769,6 +2840,41 @@ public sealed class BaseItemRepository
             }
 
             foreach (var item in query.Select(e => e.Id).ToArray())
+            {
+                if (folderList.Add(item))
+                {
+                    folderStack.Add(item);
+                }
+            }
+        }
+
+        return folderList;
+    }
+
+    private static async Task<HashSet<Guid>> TraverseHirachyDownAsync(Guid parentId, JellyfinDbContext dbContext, Expression<Func<BaseItemEntity, bool>>? filter = null)
+    {
+        var folderStack = new HashSet<Guid>()
+            {
+                parentId
+            };
+        var folderList = new HashSet<Guid>()
+            {
+                parentId
+            };
+
+        while (folderStack.Count != 0)
+        {
+            var items = folderStack.ToArray();
+            folderStack.Clear();
+            var query = dbContext.BaseItems.AsNoTracking()
+                .WhereOneOrMany(items, e => e.ParentId!.Value);
+
+            if (filter != null)
+            {
+                query = query.Where(filter);
+            }
+
+            foreach (var item in await query.Select(e => e.Id).ToArrayAsync().ConfigureAwait(false))
             {
                 if (folderList.Add(item))
                 {

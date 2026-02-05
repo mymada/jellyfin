@@ -337,11 +337,27 @@ namespace MediaBrowser.Controller.Library
         void DeleteItem(BaseItem item, DeleteOptions options);
 
         /// <summary>
+        /// Deletes the item async.
+        /// </summary>
+        /// <param name="item">Item to delete.</param>
+        /// <param name="options">Options to use for deletion.</param>
+        /// <returns>A task.</returns>
+        Task DeleteItemAsync(BaseItem item, DeleteOptions options);
+
+        /// <summary>
         /// Deletes items that are not having any children like Actors.
         /// </summary>
         /// <param name="items">Items to delete.</param>
         /// <remarks>In comparison to <see cref="DeleteItem(BaseItem, DeleteOptions, BaseItem, bool)"/> this method skips a lot of steps assuming there are no children to recusively delete nor does it define the special handling for channels and alike.</remarks>
         public void DeleteItemsUnsafeFast(IEnumerable<BaseItem> items);
+
+        /// <summary>
+        /// Deletes items that are not having any children like Actors async.
+        /// </summary>
+        /// <param name="items">Items to delete.</param>
+        /// <remarks>In comparison to <see cref="DeleteItem(BaseItem, DeleteOptions, BaseItem, bool)"/> this method skips a lot of steps assuming there are no children to recusively delete nor does it define the special handling for channels and alike.</remarks>
+        /// <returns>A task.</returns>
+        public Task DeleteItemsUnsafeFastAsync(IEnumerable<BaseItem> items);
 
         /// <summary>
         /// Deletes the item.
@@ -352,6 +368,15 @@ namespace MediaBrowser.Controller.Library
         void DeleteItem(BaseItem item, DeleteOptions options, bool notifyParentItem);
 
         /// <summary>
+        /// Deletes the item async.
+        /// </summary>
+        /// <param name="item">Item to delete.</param>
+        /// <param name="options">Options to use for deletion.</param>
+        /// <param name="notifyParentItem">Notify parent of deletion.</param>
+        /// <returns>A task.</returns>
+        Task DeleteItemAsync(BaseItem item, DeleteOptions options, bool notifyParentItem);
+
+        /// <summary>
         /// Deletes the item.
         /// </summary>
         /// <param name="item">Item to delete.</param>
@@ -359,6 +384,16 @@ namespace MediaBrowser.Controller.Library
         /// <param name="parent">Parent of item.</param>
         /// <param name="notifyParentItem">Notify parent of deletion.</param>
         void DeleteItem(BaseItem item, DeleteOptions options, BaseItem parent, bool notifyParentItem);
+
+        /// <summary>
+        /// Deletes the item async.
+        /// </summary>
+        /// <param name="item">Item to delete.</param>
+        /// <param name="options">Options to use for deletion.</param>
+        /// <param name="parent">Parent of item.</param>
+        /// <param name="notifyParentItem">Notify parent of deletion.</param>
+        /// <returns>A task.</returns>
+        Task DeleteItemAsync(BaseItem item, DeleteOptions options, BaseItem parent, bool notifyParentItem);
 
         /// <summary>
         /// Gets the named view.

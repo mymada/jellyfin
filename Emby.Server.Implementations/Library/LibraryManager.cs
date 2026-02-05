@@ -318,6 +318,11 @@ namespace Emby.Server.Implementations.Library
             DeleteItem(item, options, false);
         }
 
+        public Task DeleteItemAsync(BaseItem item, DeleteOptions options)
+        {
+            return DeleteItemAsync(item, options, false);
+        }
+
         public void DeleteItem(BaseItem item, DeleteOptions options, bool notifyParentItem)
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -325,6 +330,15 @@ namespace Emby.Server.Implementations.Library
             var parent = item.GetOwner() ?? item.GetParent();
 
             DeleteItem(item, options, parent, notifyParentItem);
+        }
+
+        public Task DeleteItemAsync(BaseItem item, DeleteOptions options, bool notifyParentItem)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+
+            var parent = item.GetOwner() ?? item.GetParent();
+
+            return DeleteItemAsync(item, options, parent, notifyParentItem);
         }
 
         public void DeleteItemsUnsafeFast(IEnumerable<BaseItem> items)
@@ -364,6 +378,45 @@ namespace Emby.Server.Implementations.Library
             }
 
             _itemRepository.DeleteItem([.. pathMaps.Select(f => f.Item.Id)]);
+        }
+
+        public async Task DeleteItemsUnsafeFastAsync(IEnumerable<BaseItem> items)
+        {
+            var pathMaps = items.Select(e => (Item: e, InternalPath: GetInternalMetadataPaths(e), DeletePaths: e.GetDeletePaths())).ToArray();
+
+            foreach (var (item, internalPaths, pathsToDelete) in pathMaps)
+            {
+                foreach (var metadataPath in internalPaths)
+                {
+                    if (!Directory.Exists(metadataPath))
+                    {
+                        continue;
+                    }
+
+                    _logger.LogDebug(
+                        "Deleting metadata path, Type: {Type}, Name: {Name}, Path: {Path}, Id: {Id}",
+                        item.GetType().Name,
+                        item.Name ?? "Unknown name",
+                        metadataPath,
+                        item.Id);
+
+                    try
+                    {
+                        Directory.Delete(metadataPath, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error deleting {MetadataPath}", metadataPath);
+                    }
+                }
+
+                foreach (var fileSystemInfo in pathsToDelete)
+                {
+                    DeleteItemPath(item, false, fileSystemInfo);
+                }
+            }
+
+            await _itemRepository.DeleteItemAsync([.. pathMaps.Select(f => f.Item.Id)]).ConfigureAwait(false);
         }
 
         public void DeleteItem(BaseItem item, DeleteOptions options, BaseItem parent, bool notifyParentItem)
@@ -451,6 +504,106 @@ namespace Emby.Server.Implementations.Library
             item.SetParent(null);
 
             _itemRepository.DeleteItem([item.Id, .. children.Select(f => f.Id)]);
+            _cache.TryRemove(item.Id, out _);
+            foreach (var child in children)
+            {
+                _cache.TryRemove(child.Id, out _);
+            }
+
+            if (parent is Folder folder)
+            {
+                folder.Children = null;
+                folder.UserData = null;
+            }
+
+            ReportItemRemoved(item, parent);
+        }
+
+        public async Task DeleteItemAsync(BaseItem item, DeleteOptions options, BaseItem parent, bool notifyParentItem)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+
+            if (item.SourceType == SourceType.Channel)
+            {
+                if (options.DeleteFromExternalProvider)
+                {
+                    try
+                    {
+                        await BaseItem.ChannelManager.DeleteItem(item).ConfigureAwait(false);
+                    }
+                    catch (ArgumentException)
+                    {
+                        // channel no longer installed
+                    }
+                }
+
+                options.DeleteFileLocation = false;
+            }
+
+            if (item is LiveTvProgram)
+            {
+                _logger.LogDebug(
+                    "Removing item, Type: {Type}, Name: {Name}, Path: {Path}, Id: {Id}",
+                    item.GetType().Name,
+                    item.Name ?? "Unknown name",
+                    item.Path ?? string.Empty,
+                    item.Id);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Removing item, Type: {Type}, Name: {Name}, Path: {Path}, Id: {Id}",
+                    item.GetType().Name,
+                    item.Name ?? "Unknown name",
+                    item.Path ?? string.Empty,
+                    item.Id);
+            }
+
+            var children = item.IsFolder
+                ? ((Folder)item).GetRecursiveChildren(false)
+                : [];
+
+            foreach (var metadataPath in GetMetadataPaths(item, children))
+            {
+                if (!Directory.Exists(metadataPath))
+                {
+                    continue;
+                }
+
+                _logger.LogDebug(
+                    "Deleting metadata path, Type: {Type}, Name: {Name}, Path: {Path}, Id: {Id}",
+                    item.GetType().Name,
+                    item.Name ?? "Unknown name",
+                    metadataPath,
+                    item.Id);
+
+                try
+                {
+                    Directory.Delete(metadataPath, true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error deleting {MetadataPath}", metadataPath);
+                }
+            }
+
+            if ((options.DeleteFileLocation && item.IsFileProtocol) || IsInternalItem(item))
+            {
+                // Assume only the first is required
+                // Add this flag to GetDeletePaths if required in the future
+                var isRequiredForDelete = true;
+
+                foreach (var fileSystemInfo in item.GetDeletePaths())
+                {
+                    DeleteItemPath(item, isRequiredForDelete, fileSystemInfo);
+
+                    isRequiredForDelete = false;
+                }
+            }
+
+            item.SetParent(null);
+
+            await _itemRepository.DeleteItemAsync([item.Id, .. children.Select(f => f.Id)]).ConfigureAwait(false);
             _cache.TryRemove(item.Id, out _);
             foreach (var child in children)
             {

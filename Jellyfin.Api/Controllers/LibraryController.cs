@@ -357,7 +357,7 @@ public class LibraryController : BaseJellyfinApiController
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult DeleteItem(Guid itemId)
+    public async Task<ActionResult> DeleteItem(Guid itemId)
     {
         var userId = User.GetUserId();
         var isApiKey = User.GetIsApiKey();
@@ -381,10 +381,10 @@ public class LibraryController : BaseJellyfinApiController
             return Unauthorized("Unauthorized access");
         }
 
-        _libraryManager.DeleteItem(
+        await _libraryManager.DeleteItemAsync(
             item,
             new DeleteOptions { DeleteFileLocation = true },
-            true);
+            true).ConfigureAwait(false);
 
         return NoContent();
     }
@@ -401,7 +401,7 @@ public class LibraryController : BaseJellyfinApiController
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult DeleteItems([FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] Guid[] ids)
+    public async Task<ActionResult> DeleteItems([FromQuery, ModelBinder(typeof(CommaDelimitedCollectionModelBinder))] Guid[] ids)
     {
         var isApiKey = User.GetIsApiKey();
         var userId = User.GetUserId();
@@ -427,10 +427,10 @@ public class LibraryController : BaseJellyfinApiController
                 return Unauthorized("Unauthorized access");
             }
 
-            _libraryManager.DeleteItem(
+            await _libraryManager.DeleteItemAsync(
                 item,
                 new DeleteOptions { DeleteFileLocation = true },
-                true);
+                true).ConfigureAwait(false);
         }
 
         return NoContent();
