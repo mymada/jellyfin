@@ -688,7 +688,7 @@ public sealed class RecordingsManager : IRecordingsManager, IDisposable
                 .Skip(seriesTimer.KeepUpTo - 1)
                 .ToList();
 
-            DeleteLibraryItemsForTimers(timersToDelete);
+            await DeleteLibraryItemsForTimers(timersToDelete).ConfigureAwait(false);
 
             if (_libraryManager.FindByPath(seriesPath, true) is not Folder librarySeries)
             {
@@ -711,13 +711,13 @@ public sealed class RecordingsManager : IRecordingsManager, IDisposable
             {
                 try
                 {
-                    _libraryManager.DeleteItem(
+                    await _libraryManager.DeleteItemAsync(
                         item,
                         new DeleteOptions
                         {
                             DeleteFileLocation = true
                         },
-                        true);
+                        true).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -727,7 +727,7 @@ public sealed class RecordingsManager : IRecordingsManager, IDisposable
         }
     }
 
-    private void DeleteLibraryItemsForTimers(List<TimerInfo> timers)
+    private async Task DeleteLibraryItemsForTimers(List<TimerInfo> timers)
     {
         foreach (var timer in timers)
         {
@@ -738,7 +738,7 @@ public sealed class RecordingsManager : IRecordingsManager, IDisposable
 
             try
             {
-                DeleteLibraryItemForTimer(timer);
+                await DeleteLibraryItemForTimer(timer).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -747,18 +747,18 @@ public sealed class RecordingsManager : IRecordingsManager, IDisposable
         }
     }
 
-    private void DeleteLibraryItemForTimer(TimerInfo timer)
+    private async Task DeleteLibraryItemForTimer(TimerInfo timer)
     {
         var libraryItem = _libraryManager.FindByPath(timer.RecordingPath, false);
         if (libraryItem is not null)
         {
-            _libraryManager.DeleteItem(
+            await _libraryManager.DeleteItemAsync(
                 libraryItem,
                 new DeleteOptions
                 {
                     DeleteFileLocation = true
                 },
-                true);
+                true).ConfigureAwait(false);
         }
         else if (File.Exists(timer.RecordingPath))
         {
